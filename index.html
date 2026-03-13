@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lokus | Loquendo Libre</title>
+    <style>
+        :root {
+            --bg: #121212;
+            --card: #1e1e1e;
+            --accent: #00ff88;
+            --text: #e0e0e0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            margin: 0;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px;
+            background: var(--card);
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        h1 { color: var(--accent); text-align: center; margin-bottom: 5px; }
+        p.subtitle { text-align: center; font-size: 0.9em; opacity: 0.7; margin-bottom: 25px; }
+
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .control-group { display: flex; flex-direction: column; }
+        label { font-size: 0.8em; margin-bottom: 5px; color: var(--accent); }
+
+        select, input, textarea {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            color: white;
+            padding: 10px;
+            border-radius: 8px;
+            outline: none;
+        }
+
+        textarea { width: 100%; height: 80px; resize: none; box-sizing: border-box; }
+
+        .btn {
+            background: var(--accent);
+            color: #000;
+            border: none;
+            padding: 12px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.3s;
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        .btn:hover { transform: scale(1.02); opacity: 0.9; }
+        .btn-secondary { background: #444; color: white; margin-top: 5px; }
+
+        .dialogue-list {
+            margin-top: 20px;
+            border-top: 1px solid #333;
+            padding-top: 15px;
+        }
+
+        .dialogue-item {
+            background: #252525;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-left: 4px solid var(--accent);
+        }
+
+        .dialogue-item span { font-size: 0.9em; flex: 1; margin-right: 10px; }
+        .delete-btn { color: #ff4444; cursor: pointer; font-weight: bold; padding: 5px; }
+
+        .recording-status {
+            text-align: center;
+            color: var(--accent);
+            font-size: 0.8em;
+            margin-top: 10px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>LOKUS</h1>
+        <p class="subtitle">Loquendo multi-diálogo sin anuncios</p>
+
+        <div class="controls">
+            <div class="control-group">
+                <label>Voz</label>
+                <select id="voiceSelect"></select>
+            </div>
+            <div class="control-group">
+                <label>Velocidad</label>
+                <input type="range" id="rate" min="0.5" max="2" value="1" step="0.1">
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>Escribe el diálogo</label>
+            <textarea id="textInput" placeholder="Ej: Hola we, este es un audio largo..."></textarea>
+            <button class="btn" onclick="addDialogue()">Añadir a la fila</button>
+        </div>
+
+        <div class="dialogue-list" id="list">
+            </div>
+
+        <button class="btn" style="background: #0088ff; color: white;" onclick="playAndRecord()">Generar Audio Completo</button>
+        <div id="status" class="recording-status">Grabando audio... espera a que termine.</div>
+    </div>
+
+    <script>
+        const synth = window.speechSynthesis;
+        let voices = [];
+        const voiceSelect = document.querySelector('#voiceSelect');
+        const listContainer = document.querySelector('#list');
+        const dialogues = [];
+
+        // Cargar voces disponibles
+        function loadVoices() {
+            voices = synth.getVoices();
+            voiceSelect.innerHTML = voices
+                .map((voice, i) => `<option value="${i}">${voice.name} (${voice.lang})</option>`)
+                .join('');
+        }
+        
+        if (speechSynthesis.onvoiceschanged !== undefined) {
+            speechSynthesis.onvoiceschanged = loadVoices;
+        }
+
+        function addDialogue() {
+            const text = document.querySelector('#textInput').value;
+            if (!text) return;
+            dialogues.push(text);
+            renderList();
+            document.querySelector('#textInput').value = '';
+        }
+
+        function renderList() {
+            listContainer.innerHTML = dialogues.map((d, i) => `
+                <div class="dialogue-item">
+                    <span>${d}</span>
+                    <div class="delete-btn" onclick="removeDialogue(${i})">✕</div>
+                </div>
+            `).join('');
+        }
+
+        function removeDialogue(index) {
+            dialogues.splice(index, 1);
+            renderList();
+        }
+
+        // Función para reproducir todo seguido
+        async function playAndRecord() {
+            if (dialogues.length === 0) return alert("Añade diálogos primero, we");
+            
+            document.getElementById('status').style.display = 'block';
+            
+            for (let text of dialogues) {
+                await speak(text);
+            }
+            
+            document.getElementById('status').style.display = 'none';
+            alert("¡Terminado! (Nota: Para descargar el .mp3 real en web estática, usa una grabadora de sistema o Chrome Audio Capture, ya que los navegadores bloquean la descarga directa de síntesis por seguridad).");
+        }
+
+        function speak(text) {
+            return new Promise((resolve) => {
+                const utter = new SpeechSynthesisUtterance(text);
+                utter.voice = voices[voiceSelect.value];
+                utter.rate = document.querySelector('#rate').value;
+                utter.onend = resolve;
+                synth.speak(utter);
+            });
+        }
+
+        loadVoices();
+    </script>
+</body>
+</html>
